@@ -1,6 +1,5 @@
-#define _CRT_SECURE_NO_WARNINGS
-#define CL_HPP_TARGET_OPENCL_VERSION 200
-#include<cl2.hpp>
+#include<CL/cl.h>
+
 #include<iostream>
 #include <string.h>
 #include <stdio.h>
@@ -9,6 +8,7 @@
 #include <string>
 #include <fstream>
 #include <chrono>
+#include <inttypes.h>
 #define SUCCESS 0
 #define FAILURE 1
 #define XMAX 1.5
@@ -21,8 +21,8 @@
 #define HEIGHT 8192
 
 
-double PWIDTH = ((XMAX - XMIN) / WIDTH);
-double PHEIGHT = ((YMAX - YMIN) / HEIGHT);
+cl_double PWIDTH = ((XMAX - XMIN) / WIDTH);
+cl_double PHEIGHT = ((YMAX - YMIN) / HEIGHT);
 
 void getTime(int(*pFunc)(char* type), char* type)
 {
@@ -65,14 +65,14 @@ int convertToString(const char *filename, std::string& s)
 	return FAILURE;
 }
 
-void writeBMP(char* dataR, char* dataG, char* dataB, char* type)
+void writeBMP(cl_char* dataR, cl_char* dataG, cl_char* dataB, char* type)
 {
 	std::cout << "Start Creating File" << std::endl;
-	unsigned int headers[13];
+	uint32_t headers[13];
 	FILE* outfile;
-	int extrabytes;
-	int paddedsize;
-	int x; int y; int n;
+	int32_t extrabytes;
+	int32_t paddedsize;
+	int32_t x; int32_t y; int32_t n;
 
 
 	extrabytes = 4 - ((WIDTH * 3) % 4);                 // How many bytes of padding to add to each
@@ -198,9 +198,8 @@ cl_device_id* getDev(char* type, cl_int& status, cl_platform_id& platform)
 }
 int main()
 {
-	getTime(createMandle, "CPU");
+	//getTime(createMandle, "CPU");
 	getTime(createMandle, "GPU");
-	getchar();
 	return SUCCESS;
 
 }
@@ -225,18 +224,20 @@ int createMandle(char* type)
 	cl_device_id *devices;
 
 	devices = getDev(type, status, platform);
+	cl_device_id selected = devices[1];
 	char buffer[10000];
 	cl_uint compute;
-	clGetDeviceInfo(devices[0], CL_DEVICE_TYPE, sizeof(buffer), buffer, NULL);
+	clGetDeviceInfo(selected, CL_DEVICE_TYPE, sizeof(buffer), buffer, NULL);
 	std::cout << buffer << std::endl;
-	clGetDeviceInfo(devices[0], CL_DEVICE_NAME, sizeof(buffer), buffer, NULL);
+	clGetDeviceInfo(selected, CL_DEVICE_NAME, sizeof(buffer), buffer, NULL);
 	std::cout << buffer << std::endl;
-	clGetDeviceInfo(devices[0], CL_DEVICE_MAX_COMPUTE_UNITS, sizeof(compute), &compute, NULL);
+	clGetDeviceInfo(selected, CL_DEVICE_MAX_COMPUTE_UNITS, sizeof(compute), &compute, NULL);
 	std::cout << compute << std::endl;
 
-	cl_context context = clCreateContext(NULL, 1, devices, NULL, NULL, NULL);
-	cl_command_queue commandQueue = clCreateCommandQueue(context, devices[0], 0, NULL);
-
+	cl_context context = clCreateContext(NULL, 1, &selected, NULL, NULL, &error);
+	std::cout << error<< std::endl;
+	cl_command_queue commandQueue = clCreateCommandQueue(context, selected, 0, &error);
+	std::cout << error<< std::endl;
 	const char *filename = "Mandle.cl";
 	std::string sourceStr;
 	status = convertToString(filename, sourceStr);
@@ -245,50 +246,82 @@ int createMandle(char* type)
 	const char *source = sourceStr.c_str();
 	size_t sourceSize[] = { strlen(source) };
 	cl_program program = clCreateProgramWithSource(context, 1, &source, sourceSize, NULL);
-	error = clBuildProgram(program, 1, devices, NULL, NULL, NULL);
+	error = clBuildProgram(program, 1, &selected, NULL, NULL, NULL);
 	if (error != CL_SUCCESS) {
 
 		// check build error and build status first
-		clGetProgramBuildInfo(program, devices[0], CL_PROGRAM_BUILD_STATUS,
+		clGetProgramBuildInfo(program, selected, CL_PROGRAM_BUILD_STATUS,
 			sizeof(cl_build_status), &status_s, NULL);
 		size_t logSize;
 		char*programLog;
 		// check build log
-		clGetProgramBuildInfo(program, devices[0], CL_PROGRAM_BUILD_LOG, 0, NULL, &logSize);
+		clGetProgramBuildInfo(program, selected, CL_PROGRAM_BUILD_LOG, 0, NULL, &logSize);
 		programLog = (char*)calloc(logSize + 1, sizeof(char));
-		clGetProgramBuildInfo(program, devices[0], CL_PROGRAM_BUILD_LOG, logSize + 1, programLog, NULL);
+		clGetProgramBuildInfo(program, selected, CL_PROGRAM_BUILD_LOG, logSize + 1, programLog, NULL);
 		printf("Build failed; error=%d, status=%d, programLog:nn%s",
 			error, status_s, programLog);
+		std::cout << programLog <<std::endl;
 		free(programLog);
 
 	}
-	char *outR = (char*)malloc((WIDTH*HEIGHT));
-	char *outG = (char*)malloc((WIDTH*HEIGHT));
-	char *outB = (char*)malloc((WIDTH*HEIGHT));
+	cl_char *outR = (cl_char*)malloc((WIDTH*HEIGHT));
+	cl_char *outG = (cl_char*)malloc((WIDTH*HEIGHT));
+	cl_char *outB = (cl_char*)malloc((WIDTH*HEIGHT));
 
-	cl_mem outR_Buffer = clCreateBuffer(context, CL_MEM_WRITE_ONLY, (WIDTH*HEIGHT) * sizeof(char), NULL, NULL);
-	cl_mem outG_Buffer = clCreateBuffer(context, CL_MEM_WRITE_ONLY, (WIDTH*HEIGHT) * sizeof(char), NULL, NULL);
-	cl_mem outB_Buffer = clCreateBuffer(context, CL_MEM_WRITE_ONLY, (WIDTH*HEIGHT) * sizeof(char), NULL, NULL);
+	cl_mem outR_Buffer = clCreateBuffer(context, CL_MEM_WRITE_ONLY, (WIDTH*HEIGHT) * sizeof(char), NULL, &error);
+	std::cout << error << std::endl;
+	cl_mem outG_Buffer = clCreateBuffer(context, CL_MEM_WRITE_ONLY, (WIDTH*HEIGHT) * sizeof(char), NULL, &error);
+	std::cout << error << std::endl;
+	cl_mem outB_Buffer = clCreateBuffer(context, CL_MEM_WRITE_ONLY, (WIDTH*HEIGHT) * sizeof(char), NULL, &error);
+	std::cout << error << std::endl;
 
-	cl_kernel kernel = clCreateKernel(program, "mandle", NULL);
+	cl_kernel kernel = clCreateKernel(program, "mandle", &error);
+	std::cout << status << std::endl;
 
 	status = clSetKernelArg(kernel, 0, sizeof(cl_mem), (void *)&outR_Buffer);
+	std::cout << status << std::endl;
 	status = clSetKernelArg(kernel, 1, sizeof(cl_mem), (void *)&outG_Buffer);
+	std::cout << status << std::endl;
 	status = clSetKernelArg(kernel, 2, sizeof(cl_mem), (void *)&outB_Buffer);
-
+	std::cout << status << std::endl;
+	
 	size_t const globalWorkSize[2] = { WIDTH,HEIGHT };
 	status = clEnqueueNDRangeKernel(commandQueue, kernel, 2, NULL, globalWorkSize, NULL, 0, NULL, NULL);
+	std::cout << status << std::endl;
+	status = clFinish(commandQueue);
+	std::cout << status << std::endl;
+
+
 	status = clEnqueueReadBuffer(commandQueue, outR_Buffer, CL_TRUE, 0,(WIDTH*HEIGHT) * sizeof(char), outR, 0, NULL, NULL);
+	std::cout << status << std::endl;
+
 	status = clEnqueueReadBuffer(commandQueue, outG_Buffer, CL_TRUE, 0,(WIDTH*HEIGHT) * sizeof(char), outG, 0, NULL, NULL);
+	std::cout << status << std::endl;
+
 	status = clEnqueueReadBuffer(commandQueue, outB_Buffer, CL_TRUE, 0,(WIDTH*HEIGHT) * sizeof(char), outB, 0, NULL, NULL);
+	std::cout << status << std::endl;
+
 	writeBMP(outR, outG, outB, type);
 	status = clReleaseKernel(kernel);				//Release kernel.
+	std::cout << status << std::endl;
+
 	status = clReleaseProgram(program);				//Release the program object.
+	std::cout << status << std::endl;
+
 	status = clReleaseMemObject(outR_Buffer);		//Release mem object.
+	std::cout << status << std::endl;
+
 	status = clReleaseMemObject(outG_Buffer);
+	std::cout << status << std::endl;
+
 	status = clReleaseMemObject(outB_Buffer);
+	std::cout << status << std::endl;
+
 	status = clReleaseCommandQueue(commandQueue);	//Release  Command queue.
+	std::cout << status << std::endl;
+
 	status = clReleaseContext(context);				//Release context.
+	std::cout << status << std::endl;
 
 	if (outR != NULL)
 	{

@@ -1,8 +1,8 @@
-#define XMAX 1.5
-#define XMIN -2.5
-#define YMAX 2.0
-#define YMIN -2.0
-#define MAXITERATIONS 20000
+#define XMAX 1.5f
+#define XMIN -2.5f
+#define YMAX 2.0f
+#define YMIN -2.0f
+#define MAXITERATIONS 2000
 #define WIDTH 8192
 #define HEIGHT 8192
 
@@ -12,8 +12,8 @@ __kernel void mandle(__global char* outR,__global char* outG,__global char* outB
 	int idx = get_global_id (0);
 	int idy = get_global_id (1);
 
-	double cx = (XMIN + idx * ((XMAX - XMIN) / WIDTH));
-	double cy = (YMIN + idy * ((YMAX - YMIN) /  HEIGHT));
+	float cx = (XMIN + idx * ((XMAX - XMIN) / WIDTH));
+	float cy = (YMIN + idy * ((YMAX - YMIN) /  HEIGHT));
 
 	int iter = 0;
 	if (cy < 0)
@@ -21,10 +21,10 @@ __kernel void mandle(__global char* outR,__global char* outG,__global char* outB
 	if (cy < ((YMAX - YMIN) / HEIGHT) / 2)
 		cy = 0;
 
-	double zx = 0.0;
-	double zy = 0.0;
-	double z2x = zx*zx;
-	double z2y = zy*zy;
+	float zx = 0.0;
+	float zy = 0.0;
+	float z2x = zx*zx;
+	float z2y = zy*zy;
 	while (iter < MAXITERATIONS && ((z2x + z2y) < 4)) {
 
 		zy = 2 * zx*zy + cy;
